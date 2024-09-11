@@ -4,9 +4,14 @@ import torch
 from torch import Tensor, nn
 from einops import rearrange
 
-from .modules.layers import (DoubleStreamBlock, EmbedND, LastLayer,
-                                 MLPEmbedder, SingleStreamBlock,
-                                 timestep_embedding)
+from .modules.layers import (
+    DoubleStreamBlock,
+    EmbedND,
+    LastLayer,
+    MLPEmbedder,
+    SingleStreamBlock,
+    timestep_embedding,
+)
 
 
 @dataclass
@@ -29,6 +34,7 @@ class Flux(nn.Module):
     """
     Transformer model for flow matching on sequences.
     """
+
     _supports_gradient_checkpointing = True
 
     def __init__(self, params: FluxParams):
@@ -43,15 +49,21 @@ class Flux(nn.Module):
             )
         pe_dim = params.hidden_size // params.num_heads
         if sum(params.axes_dim) != pe_dim:
-            raise ValueError(f"Got {params.axes_dim} but expected positional dim {pe_dim}")
+            raise ValueError(
+                f"Got {params.axes_dim} but expected positional dim {pe_dim}"
+            )
         self.hidden_size = params.hidden_size
         self.num_heads = params.num_heads
-        self.pe_embedder = EmbedND(dim=pe_dim, theta=params.theta, axes_dim=params.axes_dim)
+        self.pe_embedder = EmbedND(
+            dim=pe_dim, theta=params.theta, axes_dim=params.axes_dim
+        )
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
         self.vector_in = MLPEmbedder(params.vec_in_dim, self.hidden_size)
         self.guidance_in = (
-            MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size) if params.guidance_embed else nn.Identity()
+            MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
+            if params.guidance_embed
+            else nn.Identity()
         )
         self.txt_in = nn.Linear(params.context_in_dim, self.hidden_size)
 
@@ -69,7 +81,9 @@ class Flux(nn.Module):
 
         self.single_blocks = nn.ModuleList(
             [
-                SingleStreamBlock(self.hidden_size, self.num_heads, mlp_ratio=params.mlp_ratio)
+                SingleStreamBlock(
+                    self.hidden_size, self.num_heads, mlp_ratio=params.mlp_ratio
+                )
                 for _ in range(params.depth_single_blocks)
             ]
         )
@@ -144,8 +158,8 @@ class Flux(nn.Module):
         y: Tensor,
         block_controlnet_hidden_states=None,
         guidance: Tensor | None = None,
-        image_proj: Tensor | None = None, 
-        ip_scale: Tensor | float = 1.0, 
+        image_proj: Tensor | None = None,
+        ip_scale: Tensor | float = 1.0,
     ) -> Tensor:
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
@@ -155,7 +169,9 @@ class Flux(nn.Module):
         vec = self.time_in(timestep_embedding(timesteps, 256))
         if self.params.guidance_embed:
             if guidance is None:
-                raise ValueError("Didn't get guidance strength for guidance distilled model.")
+                raise ValueError(
+                    "Didn't get guidance strength for guidance distilled model."
+                )
             vec = vec + self.guidance_in(timestep_embedding(guidance, 256))
         vec = vec + self.vector_in(y)
         txt = self.txt_in(txt)
@@ -176,29 +192,32 @@ class Flux(nn.Module):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
-                encoder_hidden_states, hidden_states = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(block),
-                    img,
-                    txt,
-                    vec,
-                    pe,
-                    image_proj,
-                    ip_scale,
+                ckpt_kwargs: Dict[str, Any] = (
+                    {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
+                )
+                encoder_hidden_states, hidden_states = (
+                    torch.utils.checkpoint.checkpoint(
+                        create_custom_forward(block),
+                        img,
+                        txt,
+                        vec,
+                        pe,
+                        image_proj,
+                        ip_scale,
+                    )
                 )
             else:
                 img, txt = block(
-                    img=img, 
-                    txt=txt, 
-                    vec=vec, 
-                    pe=pe, 
+                    img=img,
+                    txt=txt,
+                    vec=vec,
+                    pe=pe,
                     image_proj=image_proj,
-                    ip_scale=ip_scale, 
+                    ip_scale=ip_scale,
                 )
             # controlnet residual
             if block_controlnet_hidden_states is not None:
                 img = img + block_controlnet_hidden_states[index_block % 2]
-
 
         img = torch.cat((txt, img), 1)
         for block in self.single_blocks:
@@ -213,12 +232,16 @@ class Flux(nn.Module):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
-                encoder_hidden_states, hidden_states = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(block),
-                    img,
-                    vec,
-                    pe,
+                ckpt_kwargs: Dict[str, Any] = (
+                    {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
+                )
+                encoder_hidden_states, hidden_states = (
+                    torch.utils.checkpoint.checkpoint(
+                        create_custom_forward(block),
+                        img,
+                        vec,
+                        pe,
+                    )
                 )
             else:
                 img = block(img, vec=vec, pe=pe)

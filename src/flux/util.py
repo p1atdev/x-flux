@@ -32,19 +32,21 @@ def load_safetensors(path):
             tensors[key] = f.get_tensor(key)
     return tensors
 
+
 def get_lora_rank(checkpoint):
     for k in checkpoint.keys():
         if k.endswith(".down.weight"):
             return checkpoint[k].shape[0]
 
+
 def load_checkpoint(local_path, repo_id, name):
     if local_path is not None:
-        if '.safetensors' in local_path:
+        if ".safetensors" in local_path:
             print(f"Loading .safetensors checkpoint from {local_path}")
             checkpoint = load_safetensors(local_path)
         else:
             print(f"Loading checkpoint from {local_path}")
-            checkpoint = torch.load(local_path, map_location='cpu')
+            checkpoint = torch.load(local_path, map_location="cpu")
     elif repo_id is not None and name is not None:
         print(f"Loading checkpoint {name} from repo id {repo_id}")
         checkpoint = load_from_repo_id(repo_id, name)
@@ -64,8 +66,10 @@ def c_crop(image):
     bottom = (height + new_size) / 2
     return image.crop((left, top, right, bottom))
 
+
 def pad64(x):
     return int(np.ceil(float(x) / 64.0) * 64 - x)
+
 
 def HWC3(x):
     assert x.dtype == np.uint8
@@ -85,13 +89,15 @@ def HWC3(x):
         y = y.clip(0, 255).astype(np.uint8)
         return y
 
+
 def safer_memory(x):
     # Fix many MAC/AMD problems
     return np.ascontiguousarray(x.copy()).copy()
 
-#https://github.com/Mikubill/sd-webui-controlnet/blob/main/scripts/processor.py#L17
-#Added upscale_method, mode params
-def resize_image_with_pad(input_image, resolution, skip_hwc3=False, mode='edge'):
+
+# https://github.com/Mikubill/sd-webui-controlnet/blob/main/scripts/processor.py#L17
+# Added upscale_method, mode params
+def resize_image_with_pad(input_image, resolution, skip_hwc3=False, mode="edge"):
     if skip_hwc3:
         img = input_image
     else:
@@ -110,6 +116,7 @@ def resize_image_with_pad(input_image, resolution, skip_hwc3=False, mode='edge')
         return safer_memory(x[:H_target, :W_target, ...])
 
     return safer_memory(img_padded), remove_pad
+
 
 class Annotator:
     def __init__(self, name: str, device: str):
@@ -276,12 +283,16 @@ def print_load_warning(missing: list[str], unexpected: list[str]) -> None:
     elif len(unexpected) > 0:
         print(f"Got {len(unexpected)} unexpected keys:\n\t" + "\n\t".join(unexpected))
 
+
 def load_from_repo_id(repo_id, checkpoint_name):
     ckpt_path = hf_hub_download(repo_id, checkpoint_name)
-    sd = load_sft(ckpt_path, device='cpu')
+    sd = load_sft(ckpt_path, device="cpu")
     return sd
 
-def load_flow_model(name: str, device: str | torch.device = "cuda", hf_download: bool = True):
+
+def load_flow_model(
+    name: str, device: str | torch.device = "cuda", hf_download: bool = True
+):
     # Loading Flux
     print("Init model")
     ckpt_path = configs[name].ckpt_path
@@ -304,7 +315,10 @@ def load_flow_model(name: str, device: str | torch.device = "cuda", hf_download:
         print_load_warning(missing, unexpected)
     return model
 
-def load_flow_model2(name: str, device: str | torch.device = "cuda", hf_download: bool = True):
+
+def load_flow_model2(
+    name: str, device: str | torch.device = "cuda", hf_download: bool = True
+):
     # Loading Flux
     print("Init model")
     ckpt_path = configs[name].ckpt_path
@@ -314,7 +328,9 @@ def load_flow_model2(name: str, device: str | torch.device = "cuda", hf_download
         and configs[name].repo_flow is not None
         and hf_download
     ):
-        ckpt_path = hf_hub_download(configs[name].repo_id, configs[name].repo_flow.replace("sft", "safetensors"))
+        ckpt_path = hf_hub_download(
+            configs[name].repo_id, configs[name].repo_flow.replace("sft", "safetensors")
+        )
 
     with torch.device("meta" if ckpt_path is not None else device):
         model = Flux(configs[name].params)
@@ -327,7 +343,10 @@ def load_flow_model2(name: str, device: str | torch.device = "cuda", hf_download
         print_load_warning(missing, unexpected)
     return model
 
-def load_flow_model_quintized(name: str, device: str | torch.device = "cuda", hf_download: bool = True):
+
+def load_flow_model_quintized(
+    name: str, device: str | torch.device = "cuda", hf_download: bool = True
+):
     # Loading Flux
     print("Init model")
     ckpt_path = configs[name].ckpt_path
@@ -338,20 +357,20 @@ def load_flow_model_quintized(name: str, device: str | torch.device = "cuda", hf
         and hf_download
     ):
         ckpt_path = hf_hub_download(configs[name].repo_id, configs[name].repo_flow)
-    json_path = hf_hub_download(configs[name].repo_id, 'flux_dev_quantization_map.json')
-
+    json_path = hf_hub_download(configs[name].repo_id, "flux_dev_quantization_map.json")
 
     model = Flux(configs[name].params).to(torch.bfloat16)
 
     print("Loading checkpoint")
     # load_sft doesn't support torch.device
-    sd = load_sft(ckpt_path, device='cpu')
+    sd = load_sft(ckpt_path, device="cpu")
     with open(json_path, "r") as f:
         quantization_map = json.load(f)
     print("Start a quantization process...")
     requantize(model, sd, quantization_map, device=device)
     print("Model is quantized!")
     return model
+
 
 def load_controlnet(name, device, transformer=None):
     with torch.device(device):
@@ -360,15 +379,25 @@ def load_controlnet(name, device, transformer=None):
         controlnet.load_state_dict(transformer.state_dict(), strict=False)
     return controlnet
 
+
 def load_t5(device: str | torch.device = "cuda", max_length: int = 512) -> HFEmbedder:
     # max length 64, 128, 256 and 512 should work (if your sequence is short enough)
-    return HFEmbedder("xlabs-ai/xflux_text_encoders", max_length=max_length, torch_dtype=torch.bfloat16).to(device)
+    return HFEmbedder(
+        "xlabs-ai/xflux_text_encoders",
+        max_length=max_length,
+        torch_dtype=torch.bfloat16,
+    ).to(device)
+
 
 def load_clip(device: str | torch.device = "cuda") -> HFEmbedder:
-    return HFEmbedder("openai/clip-vit-large-patch14", max_length=77, torch_dtype=torch.bfloat16).to(device)
+    return HFEmbedder(
+        "openai/clip-vit-large-patch14", max_length=77, torch_dtype=torch.bfloat16
+    ).to(device)
 
 
-def load_ae(name: str, device: str | torch.device = "cuda", hf_download: bool = True) -> AutoEncoder:
+def load_ae(
+    name: str, device: str | torch.device = "cuda", hf_download: bool = True
+) -> AutoEncoder:
     ckpt_path = configs[name].ae_path
     if (
         ckpt_path is None
@@ -412,14 +441,16 @@ class WatermarkEmbedder:
         if squeeze:
             image = image[None, ...]
         n = image.shape[0]
-        image_np = rearrange((255 * image).detach().cpu(), "n b c h w -> (n b) h w c").numpy()[:, :, :, ::-1]
+        image_np = rearrange(
+            (255 * image).detach().cpu(), "n b c h w -> (n b) h w c"
+        ).numpy()[:, :, :, ::-1]
         # torch (b, c, h, w) in [0, 1] -> numpy (b, h, w, c) [0, 255]
         # watermarking libary expects input as cv2 BGR format
         for k in range(image_np.shape[0]):
             image_np[k] = self.encoder.encode(image_np[k], "dwtDct")
-        image = torch.from_numpy(rearrange(image_np[:, :, :, ::-1], "(n b) h w c -> n b c h w", n=n)).to(
-            image.device
-        )
+        image = torch.from_numpy(
+            rearrange(image_np[:, :, :, ::-1], "(n b) h w c -> n b c h w", n=n)
+        ).to(image.device)
         image = torch.clamp(image / 255, min=0.0, max=1.0)
         if squeeze:
             image = image[0]

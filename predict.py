@@ -9,14 +9,22 @@ import subprocess
 from PIL import Image
 from typing import List
 from image_datasets.canny_dataset import canny_processor, c_crop
-from src.flux.util import load_ae, load_clip, load_t5, load_flow_model, load_controlnet, load_safetensors
+from src.flux.util import (
+    load_ae,
+    load_clip,
+    load_t5,
+    load_flow_model,
+    load_controlnet,
+    load_safetensors,
+)
 
 OUTPUT_DIR = "controlnet_results"
 MODEL_CACHE = "checkpoints"
 CONTROLNET_URL = "https://huggingface.co/XLabs-AI/flux-controlnet-canny/resolve/main/controlnet.safetensors"
 T5_URL = "https://weights.replicate.delivery/default/black-forest-labs/FLUX.1-dev/t5-cache.tar"
 CLIP_URL = "https://weights.replicate.delivery/default/black-forest-labs/FLUX.1-dev/clip-cache.tar"
-HF_TOKEN = "hf_..." # Your HuggingFace token
+HF_TOKEN = "hf_..."  # Your HuggingFace token
+
 
 def download_weights(url, dest):
     start = time.time()
@@ -24,6 +32,7 @@ def download_weights(url, dest):
     print("downloading to: ", dest)
     subprocess.check_call(["pget", "-xf", url, dest], close_fds=False)
     print("downloading took: ", time.time() - start)
+
 
 def get_models(name: str, device: torch.device, offload: bool, is_schnell: bool):
     t5 = load_t5(device, max_length=256 if is_schnell else 512)
@@ -33,6 +42,7 @@ def get_models(name: str, device: torch.device, offload: bool, is_schnell: bool)
     controlnet = load_controlnet(name, device).to(torch.bfloat16)
     return model, ae, t5, clip, controlnet
 
+
 class Predictor(BasePredictor):
     def setup(self) -> None:
         """Load the model into memory to make running multiple predictions efficient"""
@@ -41,16 +51,16 @@ class Predictor(BasePredictor):
         name = "flux-dev"
         self.offload = False
         checkpoint = "controlnet.safetensors"
-        
+
         print("Checking ControlNet weights")
         checkpoint = "controlnet.safetensors"
         if not os.path.exists(checkpoint):
             os.system(f"wget {CONTROLNET_URL}")
         print("Checking T5 weights")
-        if not os.path.exists(MODEL_CACHE+"/models--google--t5-v1_1-xxl"):
+        if not os.path.exists(MODEL_CACHE + "/models--google--t5-v1_1-xxl"):
             download_weights(T5_URL, MODEL_CACHE)
         print("Checking CLIP weights")
-        if not os.path.exists(MODEL_CACHE+"/models--openai--clip-vit-large-patch14"):
+        if not os.path.exists(MODEL_CACHE + "/models--openai--clip-vit-large-patch14"):
             download_weights(CLIP_URL, MODEL_CACHE)
 
         self.is_schnell = False
@@ -67,16 +77,18 @@ class Predictor(BasePredictor):
         self.clip = clip
         self.controlnet = controlnet
         self.model = model.to(self.torch_device)
-        if '.safetensors' in checkpoint:
+        if ".safetensors" in checkpoint:
             checkpoint1 = load_safetensors(checkpoint)
         else:
-            checkpoint1 = torch.load(checkpoint, map_location='cpu')
+            checkpoint1 = torch.load(checkpoint, map_location="cpu")
 
         controlnet.load_state_dict(checkpoint1, strict=False)
         t2 = time.time()
         print(f"Setup time: {t2 - t1}")
 
-    def preprocess_canny_image(self, image_path: str, width: int = 512, height: int = 512):
+    def preprocess_canny_image(
+        self, image_path: str, width: int = 512, height: int = 512
+    ):
         image = Image.open(image_path)
         image = c_crop(image)
         image = image.resize((width, height))
@@ -85,11 +97,16 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        prompt: str = Input(description="Input prompt", default="a handsome viking man with white hair, cinematic, MM full HD"),
+        prompt: str = Input(
+            description="Input prompt",
+            default="a handsome viking man with white hair, cinematic, MM full HD",
+        ),
         image: Path = Input(description="Input image", default=None),
-        num_inference_steps: int = Input(description="Number of inference steps", ge=1, le=64, default=28),
+        num_inference_steps: int = Input(
+            description="Number of inference steps", ge=1, le=64, default=28
+        ),
         cfg: float = Input(description="CFG", ge=0, le=10, default=3.5),
-        seed: int = Input(description="Random seed", default=None)
+        seed: int = Input(description="Random seed", default=None),
     ) -> List[Path]:
         """Run a single prediction on the model"""
         if seed is None:
@@ -115,18 +132,31 @@ class Predictor(BasePredictor):
             img.save(input_image)
 
         subprocess.check_call(
-            ["python3", "main.py",
-            "--local_path", "controlnet.safetensors",
-            "--image", input_image,
-            "--use_controlnet",
-            "--control_type", "canny",
-            "--prompt", prompt,
-            "--width", str(width),
-            "--height", str(height),
-            "--num_steps", str(num_inference_steps),
-            "--guidance", str(cfg),
-            "--seed", str(seed)
-        ], close_fds=False)
+            [
+                "python3",
+                "main.py",
+                "--local_path",
+                "controlnet.safetensors",
+                "--image",
+                input_image,
+                "--use_controlnet",
+                "--control_type",
+                "canny",
+                "--prompt",
+                prompt,
+                "--width",
+                str(width),
+                "--height",
+                str(height),
+                "--num_steps",
+                str(num_inference_steps),
+                "--guidance",
+                str(cfg),
+                "--seed",
+                str(seed),
+            ],
+            close_fds=False,
+        )
 
         # Find the first file that begins with "controlnet_result_"
         for file in os.listdir(output_dir):

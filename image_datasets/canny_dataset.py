@@ -27,9 +27,14 @@ def c_crop(image):
     bottom = (height + new_size) / 2
     return image.crop((left, top, right, bottom))
 
+
 class CustomImageDataset(Dataset):
     def __init__(self, img_dir, img_size=512):
-        self.images = [os.path.join(img_dir, i) for i in os.listdir(img_dir) if '.jpg' in i or '.png' in i]
+        self.images = [
+            os.path.join(img_dir, i)
+            for i in os.listdir(img_dir)
+            if ".jpg" in i or ".png" in i
+        ]
         self.images.sort()
         self.img_size = img_size
 
@@ -46,8 +51,8 @@ class CustomImageDataset(Dataset):
             img = img.permute(2, 0, 1)
             hint = torch.from_numpy((np.array(hint) / 127.5) - 1)
             hint = hint.permute(2, 0, 1)
-            json_path = self.images[idx].split('.')[0] + '.json'
-            prompt = json.load(open(json_path))['caption']
+            json_path = self.images[idx].split(".")[0] + ".json"
+            prompt = json.load(open(json_path))["caption"]
             return img, hint, prompt
         except Exception as e:
             print(e)
@@ -56,4 +61,6 @@ class CustomImageDataset(Dataset):
 
 def loader(train_batch_size, num_workers, **args):
     dataset = CustomImageDataset(**args)
-    return DataLoader(dataset, batch_size=train_batch_size, num_workers=num_workers, shuffle=True)
+    return DataLoader(
+        dataset, batch_size=train_batch_size, num_workers=num_workers, shuffle=True
+    )

@@ -20,9 +20,9 @@ class ZoeDetector:
             model_path = hf_hub_download("lllyasviel/Annotators", "ZoeD_M12_N.pt")
         conf = get_config("zoedepth", "infer")
         model = ZoeDepth.build_from_config(conf)
-        model.load_state_dict(torch.load(model_path)['model'], strict=False)
+        model.load_state_dict(torch.load(model_path)["model"], strict=False)
         model = model.cuda()
-        model.device = 'cuda'
+        model.device = "cuda"
         model.eval()
         self.model = model
 
@@ -32,7 +32,7 @@ class ZoeDetector:
         with torch.no_grad():
             image_depth = torch.from_numpy(image_depth).float().cuda()
             image_depth = image_depth / 255.0
-            image_depth = rearrange(image_depth, 'h w c -> 1 c h w')
+            image_depth = rearrange(image_depth, "h w c -> 1 c h w")
             depth = self.model.infer(image_depth)
 
             depth = depth[0, 0].cpu().numpy()

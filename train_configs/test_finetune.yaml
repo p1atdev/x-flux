@@ -1,9 +1,11 @@
 model_name: "flux-dev"
+
 data_config:
   train_batch_size: 1
   num_workers: 4
   img_size: 512
   img_dir: images/
+
 report_to: wandb
 train_batch_size: 1
 output_dir: saves/
